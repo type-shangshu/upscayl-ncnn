@@ -32,6 +32,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout current ncnn
+        uses: actions/checkout@v4
+        with:
+          repository: Tencent/ncnn
+          ref: b16501a6
+          path: ncnn-current
+          submodules: recursive
+
       - name: Vulkan SDK
         run: |
           wget https://sdk.lunarg.com/sdk/download/${VK_VERSION}/linux/vulkansdk-linux-x86_64-${VK_VERSION}.tar.xz?Human=true -O vk.tar.xz
@@ -45,7 +53,16 @@ jobs:
           export CC=gcc-9 CXX=g++-9
           export VULKAN_SDK=$(pwd)/${VK_VERSION}/x86_64
           mkdir build && cd build
-          cmake ../src
+          cmake ../src \
+            -DNCNN_SOURCE_DIR=../ncnn-current \
+            -DNCNN_VULKAN=ON \
+            -DNCNN_VULKAN_ONLINE_SPIRV=ON \
+            -DUSE_SYSTEM_NCNN=OFF \
+            -DWITH_LAYER_gemm=ON \
+            -DWITH_LAYER_matmul=ON \
+            -DWITH_LAYER_layernorm=ON \
+            -DWITH_LAYER_softmax=ON \
+            -DWITH_LAYER_gelu=ON
           cmake --build . -j2
 
       - name: Package
@@ -69,6 +86,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout current ncnn
+        uses: actions/checkout@v4
+        with:
+          repository: Tencent/ncnn
+          ref: b16501a6
+          path: ncnn-current
+          submodules: recursive
+
       - name: Dependencies
         run: brew install libomp glslang
 
@@ -88,6 +113,15 @@ jobs:
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DUSE_STATIC_MOLTENVK=ON \
+            -DNCNN_SOURCE_DIR=../ncnn-current \
+            -DNCNN_VULKAN=ON \
+            -DNCNN_VULKAN_ONLINE_SPIRV=ON \
+            -DUSE_SYSTEM_NCNN=OFF \
+            -DWITH_LAYER_gemm=ON \
+            -DWITH_LAYER_matmul=ON \
+            -DWITH_LAYER_layernorm=ON \
+            -DWITH_LAYER_softmax=ON \
+            -DWITH_LAYER_gelu=ON \
             -DOpenMP_C_FLAGS="-Xclang -fopenmp -I$LIBOMP/include" \
             -DOpenMP_CXX_FLAGS="-Xclang -fopenmp -I$LIBOMP/include" \
             -DOpenMP_C_LIB_NAMES=omp \
@@ -111,6 +145,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout current ncnn
+        uses: actions/checkout@v4
+        with:
+          repository: Tencent/ncnn
+          ref: b16501a6
+          path: ncnn-current
+          submodules: recursive
+
       - name: Dependencies
         run: brew install libomp glslang
 
@@ -130,6 +172,15 @@ jobs:
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DUSE_STATIC_MOLTENVK=ON \
+            -DNCNN_SOURCE_DIR=../ncnn-current \
+            -DNCNN_VULKAN=ON \
+            -DNCNN_VULKAN_ONLINE_SPIRV=ON \
+            -DUSE_SYSTEM_NCNN=OFF \
+            -DWITH_LAYER_gemm=ON \
+            -DWITH_LAYER_matmul=ON \
+            -DWITH_LAYER_layernorm=ON \
+            -DWITH_LAYER_softmax=ON \
+            -DWITH_LAYER_gelu=ON \
             -DOpenMP_C_FLAGS="-Xclang -fopenmp -I$LIBOMP/include" \
             -DOpenMP_CXX_FLAGS="-Xclang -fopenmp -I$LIBOMP/include" \
             -DOpenMP_C_LIB_NAMES=omp \
@@ -183,6 +234,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout current ncnn
+        uses: actions/checkout@v4
+        with:
+          repository: Tencent/ncnn
+          ref: b16501a6
+          path: ncnn-current
+          submodules: recursive
+
       - name: Vulkan SDK
         run: |
           Invoke-WebRequest https://sdk.lunarg.com/sdk/download/${env:VK_VERSION}/windows/VulkanSDK-${env:VK_VERSION}-Installer.exe?Human=true -OutFile vk.exe
@@ -192,8 +251,17 @@ jobs:
         run: |
           $env:VULKAN_SDK="$(pwd)/VulkanSDK"
           mkdir build; cd build
-          cmake -A x64 ../src
-          cmake --build . --config Release
+          cmake -A x64 ../src `
+            -DNCNN_SOURCE_DIR="../ncnn-current" `
+            -DNCNN_VULKAN=ON `
+            -DNCNN_VULKAN_ONLINE_SPIRV=ON `
+            -DUSE_SYSTEM_NCNN=OFF `
+            -DWITH_LAYER_gemm=ON `
+            -DWITH_LAYER_matmul=ON `
+            -DWITH_LAYER_layernorm=ON `
+            -DWITH_LAYER_softmax=ON `
+            -DWITH_LAYER_gelu=ON
+          cmake --build . --config Release --target upscayl-bin
 
       - name: Package
         run: |
