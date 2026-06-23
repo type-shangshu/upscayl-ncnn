@@ -133,7 +133,8 @@ endif()
 
 if(NOT USE_SYSTEM_NCNN)
     # build ncnn library
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ncnn/CMakeLists.txt")
+    set(NCNN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ncnn" CACHE PATH "Path to the ncnn source tree")
+    if(NOT EXISTS "${NCNN_SOURCE_DIR}/CMakeLists.txt")
         message(FATAL_ERROR "The submodules were not downloaded! Please update submodules with \"git submodule update --init --recursive\" and try again.")
     endif()
 
@@ -180,10 +181,10 @@ if(NOT USE_SYSTEM_NCNN)
     option(WITH_LAYER_scale "" OFF)
     option(WITH_LAYER_sigmoid "" ON)
     option(WITH_LAYER_slice "" ON)
-    option(WITH_LAYER_softmax "" OFF)
+    option(WITH_LAYER_softmax "" ON)
     option(WITH_LAYER_split "" ON)
     option(WITH_LAYER_spp "" OFF)
-    option(WITH_LAYER_tanh "" OFF)
+    option(WITH_LAYER_tanh "" ON)
     option(WITH_LAYER_threshold "" OFF)
     option(WITH_LAYER_tile "" OFF)
     option(WITH_LAYER_rnn "" OFF)
@@ -222,13 +223,14 @@ if(NOT USE_SYSTEM_NCNN)
     option(WITH_LAYER_mish "" OFF)
     option(WITH_LAYER_statisticspooling "" OFF)
     option(WITH_LAYER_swish "" ON)
-    option(WITH_LAYER_gemm "" OFF)
+    option(WITH_LAYER_gemm "" ON)
     option(WITH_LAYER_groupnorm "" OFF)
     option(WITH_LAYER_layernorm "" ON)
     option(WITH_LAYER_softplus "" OFF)
     option(WITH_LAYER_gelu "" ON)
+    option(WITH_LAYER_multiheadattention "" ON)
 
-    add_subdirectory(ncnn)
+    add_subdirectory("${NCNN_SOURCE_DIR}" ncnn-current)
 endif()
 
 if(USE_SYSTEM_WEBP)
@@ -276,6 +278,7 @@ compile_shader(realesrgan_postproc_tta.comp)
 add_custom_target(generate-spirv DEPENDS ${SHADER_SPV_HEX_FILES})
 
 add_executable(upscayl-bin main.cpp realesrgan.cpp)
+add_executable(cpu-ncnn cpu_ncnn.cpp)
 
 add_dependencies(upscayl-bin generate-spirv)
 
@@ -308,4 +311,4 @@ if(OPENMP_FOUND)
 endif()
 
 target_link_libraries(upscayl-bin ${REALESRGAN_LINK_LIBRARIES} -static-libstdc++)
-
+target_link_libraries(cpu-ncnn ncnn ${OpenMP_CXX_LIBRARIES} -static-libstdc++)

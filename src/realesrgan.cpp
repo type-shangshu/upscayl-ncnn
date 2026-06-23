@@ -46,10 +46,10 @@ static const uint32_t realesrgan_postproc_tta_int8s_spv_data[] = {
 RealESRGAN::RealESRGAN(int gpuid, bool _tta_mode)
 {
     net.opt.use_vulkan_compute = true;
-    net.opt.use_fp16_packed = true;
-    net.opt.use_fp16_storage = true;
+    net.opt.use_fp16_packed = false;
+    net.opt.use_fp16_storage = false;
     net.opt.use_fp16_arithmetic = false;
-    net.opt.use_int8_storage = true;
+    net.opt.use_int8_storage = false;
     net.opt.use_int8_arithmetic = false;
 
     net.set_vulkan_device(gpuid);
@@ -60,6 +60,8 @@ RealESRGAN::RealESRGAN(int gpuid, bool _tta_mode)
     bicubic_3x = 0;
     bicubic_4x = 0;
     tta_mode = _tta_mode;
+    input_blob_name = "data";
+    output_blob_name = "output";
 }
 
 RealESRGAN::~RealESRGAN()
@@ -110,9 +112,21 @@ int RealESRGAN::load(const std::string &parampath, const std::string &modelpath)
         fclose(fp);
     }
 #else
-    net.load_param(parampath.c_str());
-    net.load_model(modelpath.c_str());
+    int ret = net.load_param(parampath.c_str());
+    if (ret != 0)
+        return ret;
+    ret = net.load_model(modelpath.c_str());
+    if (ret != 0)
+        return ret;
 #endif
+
+    const std::vector<const char*>& input_names = net.input_names();
+    const std::vector<const char*>& output_names = net.output_names();
+    if (!input_names.empty())
+        input_blob_name = input_names[0];
+    if (!output_names.empty())
+        output_blob_name = output_names[0];
+    fprintf(stderr, "ncnn blobs: input=%s output=%s\n", input_blob_name.c_str(), output_blob_name.c_str());
 
     // initialize preprocess and postprocess pipeline
     {
@@ -213,6 +227,7 @@ int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
 
     const int TILE_SIZE_X = tilesize;
     const int TILE_SIZE_Y = tilesize;
+    const bool fixed_tile_input = input_blob_name == "in0" && output_blob_name == "out0";
 
     ncnn::VkAllocator *blob_vkallocator = net.vulkan_device()->acquire_blob_allocator();
     ncnn::VkAllocator *staging_vkallocator = net.vulkan_device()->acquire_staging_allocator();
@@ -304,14 +319,17 @@ int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
                     int tile_y0 = yi * TILE_SIZE_Y - prepadding;
                     int tile_y1 = std::min((yi + 1) * TILE_SIZE_Y, h) + prepadding;
 
-                    in_tile_gpu[0].create(tile_x1 - tile_x0, tile_y1 - tile_y0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[1].create(tile_x1 - tile_x0, tile_y1 - tile_y0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[2].create(tile_x1 - tile_x0, tile_y1 - tile_y0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[3].create(tile_x1 - tile_x0, tile_y1 - tile_y0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[4].create(tile_y1 - tile_y0, tile_x1 - tile_x0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[5].create(tile_y1 - tile_y0, tile_x1 - tile_x0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[6].create(tile_y1 - tile_y0, tile_x1 - tile_x0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
-                    in_tile_gpu[7].create(tile_y1 - tile_y0, tile_x1 - tile_x0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    const int tile_input_w = fixed_tile_input ? 128 : tile_x1 - tile_x0;
+                    const int tile_input_h = fixed_tile_input ? 128 : tile_y1 - tile_y0;
+
+                    in_tile_gpu[0].create(tile_input_w, tile_input_h, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[1].create(tile_input_w, tile_input_h, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[2].create(tile_input_w, tile_input_h, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[3].create(tile_input_w, tile_input_h, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[4].create(tile_input_h, tile_input_w, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[5].create(tile_input_h, tile_input_w, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[6].create(tile_input_h, tile_input_w, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    in_tile_gpu[7].create(tile_input_h, tile_input_w, 3, in_out_tile_elemsize, 1, blob_vkallocator);
 
                     if (channels == 4)
                     {
@@ -363,9 +381,9 @@ int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
                     ex.set_workspace_vkallocator(blob_vkallocator);
                     ex.set_staging_vkallocator(staging_vkallocator);
 
-                    ex.input("data", in_tile_gpu[ti]);
+                    ex.input(input_blob_name.c_str(), in_tile_gpu[ti]);
 
-                    ex.extract("output", out_tile_gpu[ti], cmd);
+                    ex.extract(output_blob_name.c_str(), out_tile_gpu[ti], cmd);
 
                     {
                         cmd.submit_and_wait();
@@ -443,7 +461,9 @@ int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
                     int tile_y0 = yi * TILE_SIZE_Y - prepadding;
                     int tile_y1 = std::min((yi + 1) * TILE_SIZE_Y, h) + prepadding;
 
-                    in_tile_gpu.create(tile_x1 - tile_x0, tile_y1 - tile_y0, 3, in_out_tile_elemsize, 1, blob_vkallocator);
+                    const int tile_input_w = fixed_tile_input ? 128 : tile_x1 - tile_x0;
+                    const int tile_input_h = fixed_tile_input ? 128 : tile_y1 - tile_y0;
+                    in_tile_gpu.create(tile_input_w, tile_input_h, 3, in_out_tile_elemsize, 1, blob_vkallocator);
 
                     if (channels == 4)
                     {
@@ -487,9 +507,17 @@ int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
                     ex.set_workspace_vkallocator(blob_vkallocator);
                     ex.set_staging_vkallocator(staging_vkallocator);
 
-                    ex.input("data", in_tile_gpu);
+                    const int input_ret = ex.input(input_blob_name.c_str(), in_tile_gpu);
+                    fprintf(stderr, "tinysr debug: input ret=%d w=%d h=%d c=%d\n",
+                            input_ret, in_tile_gpu.w, in_tile_gpu.h, in_tile_gpu.c);
+                    if (input_ret != 0)
+                        return input_ret;
 
-                    ex.extract("output", out_tile_gpu, cmd);
+                    const int extract_ret = ex.extract(output_blob_name.c_str(), out_tile_gpu, cmd);
+                    fprintf(stderr, "tinysr debug: extract ret=%d w=%d h=%d c=%d\n",
+                            extract_ret, out_tile_gpu.w, out_tile_gpu.h, out_tile_gpu.c);
+                    if (extract_ret != 0)
+                        return extract_ret;
                 }
 
                 ncnn::VkMat out_alpha_tile_gpu;

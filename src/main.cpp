@@ -1072,6 +1072,8 @@ int main(int argc, char **argv)
     if (model.find(PATHSTR("models")) != path_t::npos || model.find(PATHSTR("models2")) != path_t::npos)
     {
         prepadding = 10;
+        if (modelname.find(PATHSTR("tinysr")) != path_t::npos)
+            prepadding = 0;
     }
     else
     {
@@ -1181,6 +1183,16 @@ int main(int argc, char **argv)
     if (tilesize.empty())
     {
         tilesize.resize(use_gpu_count, 0);
+    }
+
+    if (modelname.find(PATHSTR("tinysr")) != path_t::npos)
+    {
+        for (int i = 0; i < use_gpu_count; i++)
+        {
+            if (tilesize[i] != 0 && tilesize[i] != 128)
+                fprintf(stderr, "TinySR uses a fixed 128x128 input; overriding tile size %d with 128\n", tilesize[i]);
+            tilesize[i] = 128;
+        }
     }
 
     int cpu_count = std::max(1, ncnn::get_cpu_count());
