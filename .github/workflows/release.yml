@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Tencent/ncnn
-          ref: b16501a6
+          ref: b16501a65edf03828dae55b4d20ccc6a6bf4a3b4
           path: ncnn-current
           submodules: recursive
 
@@ -90,7 +90,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Tencent/ncnn
-          ref: b16501a6
+          ref: b16501a65edf03828dae55b4d20ccc6a6bf4a3b4
           path: ncnn-current
           submodules: recursive
 
@@ -149,7 +149,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Tencent/ncnn
-          ref: b16501a6
+          ref: b16501a65edf03828dae55b4d20ccc6a6bf4a3b4
           path: ncnn-current
           submodules: recursive
 
@@ -238,7 +238,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Tencent/ncnn
-          ref: b16501a6
+          ref: b16501a65edf03828dae55b4d20ccc6a6bf4a3b4
           path: ncnn-current
           submodules: recursive
 
