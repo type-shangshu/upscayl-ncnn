@@ -91,17 +91,12 @@ jobs:
         run: |
           LIBOMP=$(brew --prefix libomp)
           MOLTENVK=$(brew --prefix molten-vk)
-          MOLTENVK_LIB="$MOLTENVK/lib/libMoltenVK.a"
-          USE_STATIC_MOLTENVK=ON
-          if [ ! -f "$MOLTENVK_LIB" ]; then
-            MOLTENVK_LIB="$MOLTENVK/lib/libMoltenVK.dylib"
-            USE_STATIC_MOLTENVK=OFF
-          fi
+          MOLTENVK_LIB="$MOLTENVK/lib/libMoltenVK.dylib"
           mkdir build && cd build
           cmake ../src \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DUSE_STATIC_MOLTENVK=$USE_STATIC_MOLTENVK \
+            -DUSE_STATIC_MOLTENVK=OFF \
             -DNCNN_SOURCE_DIR=../ncnn-current \
             -DNCNN_VULKAN=ON \
             -DNCNN_VULKAN_ONLINE_SPIRV=ON \
@@ -118,7 +113,7 @@ jobs:
             -DOpenMP_libomp_LIBRARY="$LIBOMP/lib/libomp.a" \
             -DVulkan_INCLUDE_DIR="$MOLTENVK/include" \
             -DVulkan_LIBRARY="$MOLTENVK_LIB"
-          cmake --build . -j4
+          cmake --build . --target upscayl-bin -j4
 
       - uses: actions/upload-artifact@v4
         with:
@@ -128,7 +123,7 @@ jobs:
   # ---------------- macOS arm64 ----------------
   macos-arm:
     needs: setup
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -149,17 +144,12 @@ jobs:
         run: |
           LIBOMP=$(brew --prefix libomp)
           MOLTENVK=$(brew --prefix molten-vk)
-          MOLTENVK_LIB="$MOLTENVK/lib/libMoltenVK.a"
-          USE_STATIC_MOLTENVK=ON
-          if [ ! -f "$MOLTENVK_LIB" ]; then
-            MOLTENVK_LIB="$MOLTENVK/lib/libMoltenVK.dylib"
-            USE_STATIC_MOLTENVK=OFF
-          fi
+          MOLTENVK_LIB="$MOLTENVK/lib/libMoltenVK.dylib"
           mkdir build && cd build
           cmake ../src \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DUSE_STATIC_MOLTENVK=$USE_STATIC_MOLTENVK \
+            -DUSE_STATIC_MOLTENVK=OFF \
             -DNCNN_SOURCE_DIR=../ncnn-current \
             -DNCNN_VULKAN=ON \
             -DNCNN_VULKAN_ONLINE_SPIRV=ON \
@@ -176,7 +166,7 @@ jobs:
             -DOpenMP_libomp_LIBRARY="$LIBOMP/lib/libomp.a" \
             -DVulkan_INCLUDE_DIR="$MOLTENVK/include" \
             -DVulkan_LIBRARY="$MOLTENVK_LIB"
-          cmake --build . -j4
+          cmake --build . --target upscayl-bin -j4
 
       - uses: actions/upload-artifact@v4
         with:
@@ -186,7 +176,7 @@ jobs:
   # ---------------- macOS Universal ----------------
   macos-universal:
     needs: [setup, macos-x86, macos-arm]
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       PACKAGENAME: ${{ needs.setup.outputs.APPNAME }}-${{ needs.setup.outputs.VERSION }}-macos
     steps:
