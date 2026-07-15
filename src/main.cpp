@@ -192,6 +192,7 @@ static bool parse_optarg_resize(const char *optarg, int *width, int *height, int
 #include "gpu.h"
 #include "platform.h"
 #include "realesrgan.h"
+#include "restorevar.h"
 
 #include "filesystem_utils.h"
 
@@ -470,12 +471,14 @@ class ProcThreadParams
 {
 public:
     const RealESRGAN *realesrgan;
+    RestoreVAR *restorevar;
 };
 
 void *proc(void *args)
 {
     const ProcThreadParams *ptp = (const ProcThreadParams *)args;
     const RealESRGAN *realesrgan = ptp->realesrgan;
+    RestoreVAR *restorevar = ptp->restorevar;
 
     for (;;)
     {
@@ -486,7 +489,19 @@ void *proc(void *args)
         if (v.id == -233)
             break;
 
-        realesrgan->process(v.inimage, v.outimage);
+        if (restorevar)
+        {
+            const int ret = restorevar->process(v.inimage, v.outimage);
+            if (ret != 0)
+            {
+                fprintf(stderr, "restorevar process failed: %d\n", ret);
+            }
+            v.outimage_malloced = true;
+        }
+        else
+        {
+            realesrgan->process(v.inimage, v.outimage);
+        }
 
         tosave.put(v);
     }
@@ -1142,7 +1157,7 @@ int main(int argc, char **argv)
         scale = 16;
     }
 
-    if (scale == 4)
+    if (scale == 4 && modelname != PATHSTR("restorevar"))
     {
         fprintf(stderr, "✨ Using the default scale x4\n");
     }
@@ -1166,7 +1181,26 @@ int main(int argc, char **argv)
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
 #endif
 
-    ncnn::create_gpu_instance();
+    const bool use_restorevar = modelname == PATHSTR("restorevar");
+
+    if (use_restorevar)
+    {
+        scale = 1;
+        outputScale = 4;
+        hasOutputScale = true;
+        gpuid.clear();
+        gpuid.push_back(-1);
+        jobs_proc.clear();
+        jobs_proc.push_back(1);
+        tilesize.clear();
+        tilesize.push_back(512);
+        fprintf(stderr, "✨ Using RestoreVAR backend (CPU, model input 512, output scale x4)\n");
+    }
+
+    if (!use_restorevar)
+    {
+        ncnn::create_gpu_instance();
+    }
 
     if (gpuid.empty())
     {
@@ -1199,22 +1233,25 @@ int main(int argc, char **argv)
     jobs_load = std::min(jobs_load, cpu_count);
     jobs_save = std::min(jobs_save, cpu_count);
 
-    int gpu_count = ncnn::get_gpu_count();
-    for (int i = 0; i < use_gpu_count; i++)
+    int gpu_count = use_restorevar ? 0 : ncnn::get_gpu_count();
+    if (!use_restorevar)
     {
-        if (gpuid[i] < 0 || gpuid[i] >= gpu_count)
+        for (int i = 0; i < use_gpu_count; i++)
         {
-            fprintf(stderr, "🚨 Error: Invalid GPU Device\n");
+            if (gpuid[i] < 0 || gpuid[i] >= gpu_count)
+            {
+                fprintf(stderr, "🚨 Error: Invalid GPU Device\n");
 
-            ncnn::destroy_gpu_instance();
-            return -1;
+                ncnn::destroy_gpu_instance();
+                return -1;
+            }
         }
     }
 
     int total_jobs_proc = 0;
     for (int i = 0; i < use_gpu_count; i++)
     {
-        int gpu_queue_count = ncnn::get_gpu_info(gpuid[i]).compute_queue_count();
+        int gpu_queue_count = use_restorevar ? 1 : ncnn::get_gpu_info(gpuid[i]).compute_queue_count();
         jobs_proc[i] = std::min(jobs_proc[i], gpu_queue_count);
         total_jobs_proc += jobs_proc[i];
     }
@@ -1223,6 +1260,12 @@ int main(int argc, char **argv)
     {
         if (tilesize[i] != 0)
             continue;
+
+        if (use_restorevar)
+        {
+            tilesize[i] = 512;
+            continue;
+        }
 
         uint32_t heap_budget = ncnn::get_gpu_device(gpuid[i])->get_heap_budget();
 
@@ -1243,8 +1286,24 @@ int main(int argc, char **argv)
     {
         std::vector<RealESRGAN *> realesrgan(use_gpu_count);
 
+        std::vector<RestoreVAR *> restorevar(use_gpu_count);
+
         for (int i = 0; i < use_gpu_count; i++)
         {
+            if (use_restorevar)
+            {
+                restorevar[i] = new RestoreVAR();
+                const int ret = restorevar[i]->load(paramfullpath, modelfullpath);
+                if (ret != 0)
+                {
+                    fprintf(stderr, "restorevar load failed: %d\n", ret);
+                    if (!use_restorevar)
+                        ncnn::destroy_gpu_instance();
+                    return -1;
+                }
+                continue;
+            }
+
             realesrgan[i] = new RealESRGAN(gpuid[i], tta_mode);
 
             realesrgan[i]->load(paramfullpath, modelfullpath);
@@ -1270,6 +1329,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < use_gpu_count; i++)
             {
                 ptp[i].realesrgan = realesrgan[i];
+                ptp[i].restorevar = restorevar[i];
             }
 
             std::vector<ncnn::Thread *> proc_threads(total_jobs_proc);
@@ -1334,11 +1394,14 @@ int main(int argc, char **argv)
         for (int i = 0; i < use_gpu_count; i++)
         {
             delete realesrgan[i];
+            delete restorevar[i];
         }
         realesrgan.clear();
+        restorevar.clear();
     }
 
-    ncnn::destroy_gpu_instance();
+    if (!use_restorevar)
+        ncnn::destroy_gpu_instance();
 
     return 0;
 }
