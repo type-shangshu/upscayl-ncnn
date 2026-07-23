@@ -9,7 +9,7 @@
 class RestoreVAR
 {
 public:
-    RestoreVAR();
+    RestoreVAR(int gpuid);
 
     int load(const std::string& parampath, const std::string& modelpath);
     int process(const ncnn::Mat& inimage, ncnn::Mat& outimage);

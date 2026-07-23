@@ -3,6 +3,8 @@ name: release
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
 env:
   APPLICATION_NAME: upscayl-bin
   NCNN_REF: b16501a65edf03828dae55b4d20ccc6a6bf4a3b4

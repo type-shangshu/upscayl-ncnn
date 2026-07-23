@@ -29,13 +29,15 @@ void copy_tokens(ncnn::Mat& destination, int offset, const ncnn::Mat& source)
 
 } // namespace
 
-RestoreVAR::RestoreVAR()
+RestoreVAR::RestoreVAR(int gpuid)
 {
-    net.opt.use_vulkan_compute = false;
+    net.opt.use_vulkan_compute = gpuid >= 0;
     net.opt.use_fp16_packed = false;
     net.opt.use_fp16_storage = false;
     net.opt.use_fp16_arithmetic = false;
     net.opt.num_threads = 4;
+    if (gpuid >= 0)
+        net.set_vulkan_device(gpuid);
 }
 
 int RestoreVAR::load(const std::string& parampath, const std::string& modelpath)
@@ -276,6 +278,27 @@ int RestoreVAR::process(const ncnn::Mat& inimage, ncnn::Mat& outimage)
             result[index * 3 + channel] =
                 static_cast<unsigned char>(value * 255.f + 0.5f);
         }
+    }
+
+    // VQ-VAE inherently desaturates colors (~27% saturation preservation).
+    // Apply saturation boost to compensate (factor=1.5×).
+    {
+        const float factor = 1.1f;
+        const int total = restored.w * restored.h;
+        for (int i = 0; i < total; ++i)
+        {
+            float r = result[i * 3 + 0];
+            float g = result[i * 3 + 1];
+            float b = result[i * 3 + 2];
+            float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+            float nr = gray + factor * (r - gray);
+            float ng = gray + factor * (g - gray);
+            float nb = gray + factor * (b - gray);
+            result[i * 3 + 0] = static_cast<unsigned char>(std::max(0.f, std::min(255.f, nr)));
+            result[i * 3 + 1] = static_cast<unsigned char>(std::max(0.f, std::min(255.f, ng)));
+            result[i * 3 + 2] = static_cast<unsigned char>(std::max(0.f, std::min(255.f, nb)));
+        }
+        std::fprintf(stderr, "restorevar: saturation boost ×%.1f applied\n", factor);
     }
 
     outimage = ncnn::Mat(restored.w, restored.h, result, static_cast<size_t>(3), 3);

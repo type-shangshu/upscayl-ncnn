@@ -27,7 +27,7 @@ if [ "$PLATFORM" == "arm64" ]; then
 		 -D Vulkan_INCLUDE_DIR="../vulkan-sdk/macOS/include" \
 		 -D Vulkan_LIBRARY=../vulkan-sdk/macOS/lib/MoltenVK.xcframework/macos-arm64_x86_64/libMoltenVK.a \
 		../src ;
-		cmake --build .;
+		cmake --build . -j$(nproc);
 elif [ "$PLATFORM" == "linux" ]; then
 		# Set compilers explicitly
 		export CC=gcc
@@ -39,7 +39,7 @@ elif [ "$PLATFORM" == "linux" ]; then
 		-D Vulkan_LIBRARY="../vulkan-sdk/x86_64/lib/libvulkan.so" \
 		-D Vulkan_glslangValidator_EXECUTABLE="../vulkan-sdk/x86_64/bin/glslangValidator" \
 		../src ;
-		cmake --build .;
+		cmake --build . -j$(nproc);
 		# Run upscayl-bin
 		echo "Building for other platforms needs to be added to build.sh"
 fi

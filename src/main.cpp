@@ -1090,11 +1090,6 @@ int main(int argc, char **argv)
         if (modelname.find(PATHSTR("tinysr")) != path_t::npos)
             prepadding = 0;
     }
-    else
-    {
-        fprintf(stderr, "🚨 Error: Unknown model dir type. Make sure that the model directory is called 'models' with *.param and *.bin files inside it.\n");
-        return -1;
-    }
 
     // if (modelname.find(PATHSTR("realesrgan-x4plus")) != path_t::npos
     //     || modelname.find(PATHSTR("realesrnet-x4plus")) != path_t::npos
@@ -1188,19 +1183,14 @@ int main(int argc, char **argv)
         scale = 1;
         outputScale = 4;
         hasOutputScale = true;
-        gpuid.clear();
-        gpuid.push_back(-1);
         jobs_proc.clear();
         jobs_proc.push_back(1);
         tilesize.clear();
         tilesize.push_back(512);
-        fprintf(stderr, "✨ Using RestoreVAR backend (CPU, model input 512, output scale x4)\n");
+        fprintf(stderr, "✨ Using RestoreVAR backend (Vulkan if gpuid >= 0, model input 512, output scale x4)\n");
     }
 
-    if (!use_restorevar)
-    {
-        ncnn::create_gpu_instance();
-    }
+    ncnn::create_gpu_instance();
 
     if (gpuid.empty())
     {
@@ -1233,25 +1223,22 @@ int main(int argc, char **argv)
     jobs_load = std::min(jobs_load, cpu_count);
     jobs_save = std::min(jobs_save, cpu_count);
 
-    int gpu_count = use_restorevar ? 0 : ncnn::get_gpu_count();
-    if (!use_restorevar)
+    int gpu_count = ncnn::get_gpu_count();
+    for (int i = 0; i < use_gpu_count; i++)
     {
-        for (int i = 0; i < use_gpu_count; i++)
+        if (gpuid[i] < 0 || gpuid[i] >= gpu_count)
         {
-            if (gpuid[i] < 0 || gpuid[i] >= gpu_count)
-            {
-                fprintf(stderr, "🚨 Error: Invalid GPU Device\n");
+            fprintf(stderr, "🚨 Error: Invalid GPU Device\n");
 
-                ncnn::destroy_gpu_instance();
-                return -1;
-            }
+            ncnn::destroy_gpu_instance();
+            return -1;
         }
     }
 
     int total_jobs_proc = 0;
     for (int i = 0; i < use_gpu_count; i++)
     {
-        int gpu_queue_count = use_restorevar ? 1 : ncnn::get_gpu_info(gpuid[i]).compute_queue_count();
+        int gpu_queue_count = ncnn::get_gpu_info(gpuid[i]).compute_queue_count();
         jobs_proc[i] = std::min(jobs_proc[i], gpu_queue_count);
         total_jobs_proc += jobs_proc[i];
     }
@@ -1292,13 +1279,12 @@ int main(int argc, char **argv)
         {
             if (use_restorevar)
             {
-                restorevar[i] = new RestoreVAR();
+                restorevar[i] = new RestoreVAR(gpuid[i]);
                 const int ret = restorevar[i]->load(paramfullpath, modelfullpath);
                 if (ret != 0)
                 {
                     fprintf(stderr, "restorevar load failed: %d\n", ret);
-                    if (!use_restorevar)
-                        ncnn::destroy_gpu_instance();
+                    ncnn::destroy_gpu_instance();
                     return -1;
                 }
                 continue;
@@ -1400,8 +1386,7 @@ int main(int argc, char **argv)
         restorevar.clear();
     }
 
-    if (!use_restorevar)
-        ncnn::destroy_gpu_instance();
+    ncnn::destroy_gpu_instance();
 
     return 0;
 }

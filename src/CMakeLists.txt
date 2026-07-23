@@ -231,6 +231,7 @@ if(NOT USE_SYSTEM_NCNN)
     option(WITH_LAYER_multiheadattention "" ON)
 
     add_subdirectory("${NCNN_SOURCE_DIR}" ncnn-current)
+    target_include_directories(ncnn PRIVATE $<BUILD_INTERFACE:${NCNN_SOURCE_DIR}/glslang>)
 endif()
 
 if(USE_SYSTEM_WEBP)
