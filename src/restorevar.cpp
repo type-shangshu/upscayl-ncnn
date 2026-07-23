@@ -280,27 +280,6 @@ int RestoreVAR::process(const ncnn::Mat& inimage, ncnn::Mat& outimage)
         }
     }
 
-    // VQ-VAE inherently desaturates colors (~27% saturation preservation).
-    // Apply saturation boost to compensate (factor=1.5×).
-    {
-        const float factor = 1.1f;
-        const int total = restored.w * restored.h;
-        for (int i = 0; i < total; ++i)
-        {
-            float r = result[i * 3 + 0];
-            float g = result[i * 3 + 1];
-            float b = result[i * 3 + 2];
-            float gray = 0.299f * r + 0.587f * g + 0.114f * b;
-            float nr = gray + factor * (r - gray);
-            float ng = gray + factor * (g - gray);
-            float nb = gray + factor * (b - gray);
-            result[i * 3 + 0] = static_cast<unsigned char>(std::max(0.f, std::min(255.f, nr)));
-            result[i * 3 + 1] = static_cast<unsigned char>(std::max(0.f, std::min(255.f, ng)));
-            result[i * 3 + 2] = static_cast<unsigned char>(std::max(0.f, std::min(255.f, nb)));
-        }
-        std::fprintf(stderr, "restorevar: saturation boost ×%.1f applied\n", factor);
-    }
-
     outimage = ncnn::Mat(restored.w, restored.h, result, static_cast<size_t>(3), 3);
     return 0;
 }
